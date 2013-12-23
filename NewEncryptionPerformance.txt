@@ -1,0 +1,212 @@
+@ECHO off
+SETLOCAL enabledelayedexpansion
+
+ECHO What is the Computers Model number?
+SET /p a=
+MKDIR %systemdrive%\%a%
+ECHO Results will be located at %systemdrive%\%a%
+rem use %computername% instead of %a% to use the current computer name
+
+SET RegQry=HKLM\Hardware\Description\System\CentralProcessor\0
+
+REG.exe Query %RegQry% 2>nul | FIND /n /i "x86">nul
+ 
+IF %ERRORLEVEL%==0  ( 
+ECHO 32 bit system detected >> %systemdrive%\%a%\result.txt
+SET s=Program Files
+) else (
+ECHO 64 bit system detected >> %systemdrive%\%a%\result.txt
+SET s="Program Files (x86)"
+)
+
+MSINFO32 /nfo %systemdrive%\%a%\systeminfo.nfo
+systeminfo >> %systemdrive%\%a%\systeminfo.nfo
+
+REM disable hibernation 
+powercfg -h off
+%systemdrive%\windows\system32\powercfg.exe -change -monitor-timeout-ac 0
+%systemdrive%\windows\system32\powercfg.exe -change -monitor-timeout-dc 0
+%systemdrive%\windows\system32\powercfg.exe -change -disk-timeout-ac 0
+%systemdrive%\windows\system32\powercfg.exe -change -disk-timeout-dc 0
+%systemdrive%\windows\system32\powercfg.exe -change -standby-timeout-ac 0
+%systemdrive%\windows\system32\powercfg.exe -change -standby-timeout-dc 0
+%systemdrive%\windows\system32\powercfg.exe -change -hibernate-timeout-ac 0
+%systemdrive%windows\system32\powercfg.exe -change -hibernate-timeout-dc 0
+
+rem to disable windows updates
+sc config wuauserv start= disabled
+sc config BITS start= demand
+sc stop wuauserv
+sc stop BITS 
+
+REM b is used as a flag to change mode
+SET b=1
+
+ECHO "Starting Performance tests..." >> %systemdrive%\%a%\Result.txt
+echo. %systemdrive%\%a%\Result.txt
+
+CD\
+CD %systemdrive%\%s%\PGP Corporation\PGP Desktop
+pgpwde --version >> %systemdrive%\%a%\Result.txt
+echo. %systemdrive%\%a%\Result.txt
+
+:startencryption
+
+IF %b% EQU 1  ( 
+cd\
+cd %systemdrive%\%s%\Benchmarks\Iozone3_414
+iozone -Rab %systemdrive%\%a%\iozone_before_encryption.csv -g 8G -i 0 -i 1
+CD\
+CD %systemdrive%\%s%\PGP Corporation\PGP Desktop
+pgpwde -d 1 --secure -u sqa -p sqa
+ECHO xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\result.txt
+echo.  >> %systemdrive%\%a%\result.txt
+ECHO NORMAL MODE >> %systemdrive%\%a%\result.txt
+echo.  >> %systemdrive%\%a%\result.txt
+ECHO xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\result.txt
+ECHO ENCRYPTION - NORMAL MODE >> %systemdrive%\%a%\result.txt
+ECHO ENCRYPTION - NORMAL MODE RUNING
+@ECHO Encryption started: %date% %time% >> %systemdrive%\%a%\result.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+goto:encryptioncheck
+) else (
+IF %b% EQU 2  ( 
+pgpwde -d 1 --secure --fast -u sqa -p sqa
+ECHO xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\result.txt
+echo.  >> %systemdrive%\%a%\result.txt
+ECHO FAST MODE >> %systemdrive%\%a%\result.txt
+echo.  >> %systemdrive%\%a%\result.txt
+ECHO xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\result.txt
+ECHO ENCRYPTION - FAST MODE  >> %systemdrive%\%a%\result.txt
+ECHO ENCRYPTION - FAST MODE RUNNING
+@ECHO encryption started: %date% %time% >> %systemdrive%\%a%\result.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+goto:encryptioncheck
+) else (
+pgpwde -d 1 --secure --safe -u sqa -p sqa
+ECHO xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\result.txt
+echo.  >> %systemdrive%\%a%\result.txt
+ECHO SAFE MODE >> %systemdrive%\%a%\result.txt
+echo.  >> %systemdrive%\%a%\result.txt
+ECHO xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\result.txt
+ECHO ENCRYPTION - SAFE MODE / POWER FAILURE SAFETY >> %systemdrive%\%a%\result.txt
+ECHO ENCRYPTION - SAFE MODE / POWER FAILURE SAFETY RUNNING
+@ECHO encryption started: %date% %time% >> %systemdrive%\%a%\result.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+goto:encryptioncheck
+)
+)
+)
+
+
+
+:encryptioncheck
+FINDSTR /r /i "process" %systemdrive%\%a%\currentstatus.txt >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+ IF ERRORLEVEL 1  ( 
+ goto:startdecryption
+ ) else (
+ goto:encryptionloop
+ )
+
+:encryptionloop
+PING  -n 60 127.0.0.1 > nul
+
+@ECHO %date% %time% >> %systemdrive%\%a%\teststatus.txt
+TASKLIST /v /fi "ImageName eq PGPtray.exe" >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+TASKLIST /v /fi "ImageName eq PGPcbt64.exe" >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+echo.  >> %systemdrive%\%a%\teststatus.txt
+goto:encryptioncheck
+
+
+:startdecryption
+ECHO DISK ENCRYPTION COMPLETE >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+@ECHO Encryption complete %systemdrive% %date% %time% >> %systemdrive%\%a%\result.txt
+
+IF %b% EQU 1  ( 
+cd\
+cd %systemdrive%\%s%\Benchmarks\Iozone3_414
+iozone -Rab %systemdrive%\%a%\iozone_after_encryption.csv -g 4G -i 0 -i 1
+CD\
+CD %systemdrive%\%s%\PGP Corporation\PGP Desktop
+pgpwde -d 1 --decrypt -p sqa
+ECHO DECRYPTION - NORMAL MODE >> %systemdrive%\%a%\result.txt
+ECHO DECRYPTION - NORMAL MODE RUNING
+@ECHO Decryption started: %date% %time% >> %systemdrive%\%a%\result.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+echo.  >> %systemdrive%\%a%\teststatus.txt
+goto:decryptioncheck
+) else (
+IF %b% EQU 2  ( 
+pgpwde -d 1 --decrypt --fast -p sqa
+ECHO DECRYPTION - FAST MODE / MAXIMUM CPU USAGE >> %systemdrive%\%a%\result.txt
+ECHO DECRYPTION - FAST MODE / MAXIMUM CPU USAGE RUNNING
+@ECHO Decryption started: %date% %time% >> %systemdrive%\%a%\result.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+echo.  >> %systemdrive%\%a%\teststatus.txt
+goto:decryptioncheck
+) else (
+pgpwde -d 1 --decrypt --safe -p sqa
+ECHO DECRYPTION - SAFE MODE / POWER FAILURE SAFETY >> %systemdrive%\%a%\result.txt
+ECHO DECRYPTION - SAFE MODE / POWER FAILURE SAFETY RUNNING
+@ECHO Decryption started: %date% %time% >> %systemdrive%\%a%\result.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+echo.  >> %systemdrive%\%a%\teststatus.txt
+goto:decryptioncheck
+)
+)
+)
+
+
+
+:decryptioncheck
+FINDSTR /r /i "process" %systemdrive%\%a%\currentstatus.txt >> %systemdrive%\%a%\teststatus.txt
+ IF ERRORLEVEL 1  ( 
+@ECHO Decryption complet%systemdrive% %date% %time% >> %systemdrive%\%a%\result.txt
+ goto:modechange
+ ) else (
+ goto:decryptionloop
+ )
+
+:decryptionloop
+PING  -n 60 127.0.0.1 > nul
+@ECHO %date% %time% >> %systemdrive%\%a%\teststatus.txt
+REM tasklist is used to record memory usage
+echo. >> %systemdrive%\%a%\teststatus.txt
+TASKLIST /v /fi "ImageName eq PGPtray.exe" >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+TASKLIST /v /fi "ImageName eq PGPcbt64.exe" >> %systemdrive%\%a%\teststatus.txt
+echo. >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  >> %systemdrive%\%a%\teststatus.txt
+pgpwde -d 1 --status  > %systemdrive%\%a%\currentstatus.txt
+ECHO.   >> %systemdrive%\%a%\teststatus.txt
+goto:decryptioncheck
+
+
+:modechange
+IF %b% EQU 1  ( 
+set b=2
+goto:startencryption
+) else (
+IF %b% EQU 2  ( 
+set b=3
+goto:startencryption
+) else (
+goto:exit
+)
+)
+
+:exit

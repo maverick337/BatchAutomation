@@ -1,0 +1,112 @@
+@echo off
+if exist list_disk.txt 
+(
+	del /f list_disk.txt
+)
+
+ping 127.0.0.1 -n 5 -w 1000 > nul
+echo list disk >> list_disk.txt
+echo exit >> list_disk.txt
+echo about to run diskpart...
+
+if exist disks_output.txt 
+(
+	del /f disks_output.txt
+)
+
+ping 127.0.0.1 -n 5 -w 1000 > nul
+diskpart /s "list_disk.txt" >disks_output.txt
+ping 127.0.0.1 -n 5 -w 1000 > nul
+
+set /a _HDD=0
+for /f %%j in ('Type "disks_output.txt"^|Find "Disk " /c') Do Set /a _HDD=%%j-1
+
+if exist list_disk.txt
+(
+	del /f list_disk.txt
+)
+if exist disks_output.txt 
+(
+	del /f disks_output.txt
+)
+
+echo %_HDD% >> \PGPInternalBeta.log
+
+if %_HDD% leq 0 
+(
+	echo you don't have access... try with administrator
+	pause
+	goto :eof
+)
+
+Echo passed access
+
+if %_HDD% gtr 1 
+(
+	echo multiple HDD...skipping
+	echo multiple HDD...skipping >> \PGPInternalBeta.log
+	goto :eof
+) 
+else 
+(
+	echo restamping will go shortly
+	echo restamping will go shortly >> \PGPInternalBeta.log
+	goto :restamping
+)
+
+
+:restamping 
+echo starting restamping
+taskkill /f /fi "status eq running" /im "pgptray*" >> \PGPInternalBeta.log
+ping 127.0.0.1 -n 5 -w 1000 > nul
+
+tasklist /fi "imagename eq pgptray.exe" 2>nul | find /i /n "pgptray.exe">nul
+if "%errorlevel%"==0 (
+
+echo " PGPTray is running.Please stop PGP Tray manually and try again." >> \PGPInternalBeta.log
+
+goto :eof
+
+) else (
+echo PGPTray killed.Proceed. >> \PGPInternalBeta.log
+goto :conditionstart
+)
+
+:conditionstart
+
+Set RegQry=HKLM\Hardware\Description\System\CentralProcessor\0
+
+REG.exe Query %RegQry% 2>nul |  find /i /n "x86">nul
+ 
+If %ERRORLEVEL% == 0 (
+   
+echo 32 bit system detected >> \PGPInternalBeta.log
+rmdir /S /Q "%appdata%\PGP Corporation"
+rmdir /S /Q "%userprofile%\Local Settings\Application Data\PGP Corporation"
+rmdir /S /Q "%userprofile%\My Documents\PGP"
+echo PGP Directories deleted >> \PGPInternalBeta.log
+REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\PGP Corporation\PGP" /v PGPSTAMP /f
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\PGP Corporation\PGP" /v PGPSTAMP /t REG_SZ /d "ovid=ENTER IP HERE"
+echo PGP Stamp changed >> \PGPInternalBeta.log
+
+ping 127.0.0.1 -n 2 -w 1000 > nul
+start /D "\Program Files\PGP Corporation\PGP Desktop" /B PGPtray.exe
+echo PGPTray started. >> \PGPInternalBeta.log
+
+) ELSE (   
+echo 64 bit system detected >> \PGPInternalBeta.log
+rmdir /S /Q "%appdata%\PGP Corporation"
+rmdir /S /Q "%userprofile%\Local Settings\Application Data\PGP Corporation"
+rmdir /S /Q "%userprofile%\My Documents\PGP"
+ 
+echo PGP Directories deleted >> \PGPInternalBeta.log
+REG DELETE "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\PGP Corporation\PGP" /v PGPSTAMP /f
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\PGP Corporation\PGP" /v PGPSTAMP /t REG_SZ /d "ovid=ENTER IP HERE"
+echo PGP Stamp changed >> \PGPInternalBeta.log
+ping 127.0.0.1 -n 2 -w 1000 > nul
+start /D "\Program Files (x86)\PGP Corporation\PGP Desktop" /B PGPtray.exe
+echo PGPTray started. >> \PGPInternalBeta.log
+)
+
+:eof
+
